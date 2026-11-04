@@ -85,7 +85,9 @@ export function WalletButton() {
         <button onClick={() => disconnect()}>Disconnect</button>
       </div>
     );
-  const unique = connectors.filter((c, i, all) => all.findIndex((x) => x.name === c.name) === i);
+  const named = connectors.filter((c) => c.name !== "Injected");
+  const list = named.length ? named : connectors;
+  const unique = list.filter((c, i, all) => all.findIndex((x) => x.name === c.name) === i);
   return (
     <div className="wallet-row">
       <button className="wallet-button" onClick={() => setOpen((o) => !o)} disabled={isPending}>

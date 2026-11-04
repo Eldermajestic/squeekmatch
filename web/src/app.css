@@ -167,11 +167,13 @@ button.inline {
     overflow-x: auto;
   }
 }
+.app-shell {
+  max-width: 1080px;
+}
 main.workspace {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 980px;
 }
 main.workspace > .page-heading {
   display: block;
