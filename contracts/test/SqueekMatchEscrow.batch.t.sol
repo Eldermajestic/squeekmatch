@@ -51,3 +51,34 @@ contract SqueekMatchEscrowBatchTest is SqueekMatchEscrowTestBase {
         escrow.fillAsks(ids);
     }
 }
+
+contract SqueekMatchEscrowBatchBidTest is SqueekMatchEscrowTestBase {
+    function test_createBids_opensEachAndEscrowsTotal() public {
+        uint256 before = sqk.balanceOf(alice);
+        vm.prank(alice);
+        uint256 first = escrow.createBids(1, false, 5 ether, 3, 0);
+        assertEq(sqk.balanceOf(alice), before - 15 ether);
+        assertEq(sqk.balanceOf(address(escrow)), 15 ether);
+        for (uint256 i; i < 3; ++i) assertTrue(escrow.isOpen(first + i));
+        vm.prank(bob);
+        escrow.fillBid(first + 1, B1);
+        assertEq(nft.ownerOf(B1), alice);
+        vm.prank(alice);
+        escrow.cancelBid(first);
+        assertEq(sqk.balanceOf(address(escrow)), 5 ether);
+        _assertNoSqkLost();
+    }
+
+    function test_createBids_rejectsBadInput() public {
+        vm.startPrank(alice);
+        vm.expectRevert(abi.encodeWithSelector(SqueekMatchEscrow.BatchSize.selector, 0, 20));
+        escrow.createBids(1, false, 1 ether, 0, 0);
+        vm.expectRevert(abi.encodeWithSelector(SqueekMatchEscrow.BatchSize.selector, 21, 20));
+        escrow.createBids(1, false, 1 ether, 21, 0);
+        vm.expectRevert(SqueekMatchEscrow.ZeroAmount.selector);
+        escrow.createBids(1, false, 0, 2, 0);
+        vm.expectRevert(SqueekMatchEscrow.InvalidLevel.selector);
+        escrow.createBids(10, true, 1 ether, 2, 0);
+        vm.stopPrank();
+    }
+}

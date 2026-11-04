@@ -302,8 +302,27 @@ contract SqueekMatchEscrow is ReentrancyGuard {
     {
         if (amount == 0) revert ZeroAmount();
         _requireFillableLevel(level, mergeReady);
-        uint64 expiresAt = _expiry(duration);
+        bidId = _openBid(level, mergeReady, amount, _expiry(duration));
+        SQK.safeTransferFrom(msg.sender, address(this), amount);
+    }
 
+    function createBids(uint8 level, bool mergeReady, uint256 amountEach, uint256 count, uint64 duration)
+        external
+        nonReentrant
+        returns (uint256 firstBidId)
+    {
+        if (amountEach == 0) revert ZeroAmount();
+        if (count == 0 || count > MAX_BATCH) revert BatchSize(count, MAX_BATCH);
+        _requireFillableLevel(level, mergeReady);
+        uint64 expiresAt = _expiry(duration);
+        firstBidId = nextOrderId;
+        for (uint256 i; i < count; ++i) {
+            _openBid(level, mergeReady, amountEach, expiresAt);
+        }
+        SQK.safeTransferFrom(msg.sender, address(this), amountEach * count);
+    }
+
+    function _openBid(uint8 level, bool mergeReady, uint256 amount, uint64 expiresAt) private returns (uint256 bidId) {
         bidId = _nextId(Kind.Bid);
         bids[bidId] = Bid({
             maker: msg.sender,
@@ -314,8 +333,6 @@ contract SqueekMatchEscrow is ReentrancyGuard {
             amount: amount
         });
         emit BidCreated(bidId, msg.sender, level, mergeReady, amount, expiresAt);
-
-        SQK.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     /// @notice Sell `tokenId` into bid `bidId`: the Squeek goes to the maker and the escrowed SQK to you.

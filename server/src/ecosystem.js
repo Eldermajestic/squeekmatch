@@ -43,6 +43,19 @@ export async function loadEcosystem() {
       eco.ok = false;
     }
   }
+  try {
+    const st = await fetchApi("/v1/settlements?range=7d");
+    const blocks = Number(st.summary?.completedBlockCount ?? 0);
+    eco.blocksPerDay = blocks > 0 ? blocks / 7 : null;
+    const minted = Number(BigInt(st.mining?.rangeMintedBaseUnits ?? 0) / 10n ** 12n) / 1e6;
+    const stakingFunded = Number(BigInt(econ.mining?.stakingFundedBaseUnits ?? 0) / 10n ** 12n);
+    const allFunded = stakingFunded + Number(BigInt(econ.mining?.gachaFundedBaseUnits ?? 0) / 10n ** 12n);
+    const power = Number((BigInt(econ.staking?.totalNftPower ?? 0) + BigInt(econ.staking?.totalSqkPower ?? 0)) / 10n ** 15n) / 1e3;
+    eco.sqkPerPowerPerDay = allFunded > 0 && power > 0 ? (minted * (stakingFunded / allFunded)) / 7 / power : null;
+  } catch {
+    eco.blocksPerDay ??= null;
+    eco.sqkPerPowerPerDay ??= null;
+  }
   eco.checkedAt = Date.now();
   return eco;
 }

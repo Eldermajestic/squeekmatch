@@ -308,6 +308,45 @@
  },
  {
   "type": "function",
+  "name": "createBids",
+  "inputs": [
+   {
+    "name": "level",
+    "type": "uint8",
+    "internalType": "uint8"
+   },
+   {
+    "name": "mergeReady",
+    "type": "bool",
+    "internalType": "bool"
+   },
+   {
+    "name": "amountEach",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "count",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "duration",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "firstBidId",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
   "name": "createSwap",
   "inputs": [
    {

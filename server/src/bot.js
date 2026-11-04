@@ -127,6 +127,18 @@ export function createBot(store, ctx) {
     }
   }
 
+  function onWant(w) {
+    if (!token) return;
+    for (const [chatId, s] of Object.entries(subs)) {
+      for (const wallet of s.wallets) {
+        if (wallet === w.address) continue;
+        const single = singlesOf(wallet).find((x) => x.level === w.level);
+        if (single)
+          send(chatId, `🔎 <code>${short(w.address)}</code> is looking for a L${w.level} Squeek${w.count > 1 ? ` (x${w.count})` : ""}.${w.note ? `\n“${w.note}”` : ""}\nYour single #${single.tokenId} fits. List it or offer a swap:\n${config.siteUrl}/?tab=trade`);
+      }
+    }
+  }
+
   function onSnapshot(snapshot, eco) {
     if (!token) return;
     const wallets = new Set(Object.values(subs).flatMap((s) => s.wallets));
@@ -143,5 +155,5 @@ export function createBot(store, ctx) {
     store.save("pairmemo", pairMemo);
   }
 
-  return { poll, onOrderEvent, onSnapshot, enabled: Boolean(token), subscribers: () => Object.keys(subs).length };
+  return { poll, onOrderEvent, onSnapshot, onWant, enabled: Boolean(token), subscribers: () => Object.keys(subs).length };
 }
