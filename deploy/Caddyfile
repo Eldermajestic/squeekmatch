@@ -1,0 +1,11 @@
+squeekmatch.xyz, www.squeekmatch.xyz {
+	encode gzip
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8787
+	}
+	handle {
+		root * /root/squeekmatch/dist
+		try_files {path} /index.html
+		file_server
+	}
+}
