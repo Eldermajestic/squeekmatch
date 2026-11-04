@@ -173,6 +173,7 @@ button.inline {
 main.workspace {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 20px;
 }
 main.workspace > .page-heading {
@@ -194,4 +195,33 @@ main.workspace > .page-heading {
   .app-shell {
     padding-inline: 16px;
   }
+}
+.share {
+  display: inline-flex;
+  gap: 6px;
+}
+.share .button,
+.share button {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+.holder-row.selected {
+  background: var(--selected);
+  border-radius: 10px;
+  padding-inline: 10px;
+}
+.wallet-summary {
+  display: grid;
+  gap: 8px;
+}
+.wallet-summary .token-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.wallet-summary .token-row .muted {
+  flex: 1;
 }

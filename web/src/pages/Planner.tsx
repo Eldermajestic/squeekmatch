@@ -3,7 +3,8 @@ import { ArrowRight } from "lucide-react";
 import type { Config } from "../api";
 import { escrowAbi } from "../chain";
 import { useOrders, useRefresh, useWallet } from "../data";
-import { same, sqk } from "../format";
+import { eta, perDay, same, sqk } from "../format";
+import { pairAfterBuy } from "../followups";
 import { bestPlans, cascade, countByLevel, power } from "../plan";
 import { useApprovals, useTx } from "../tx";
 import { Empty, Level, Notice, Section, TokenLink } from "../ui";
@@ -25,13 +26,13 @@ export default function Planner({ cfg, who, me, tradingOff }: { cfg: Config; who
   const isMe = same(me, who);
   const escrow = cfg.contracts.escrow as Address;
 
-  const buy = async (ids: number[], cost: bigint) => {
+  const buy = async (ids: number[], cost: bigint, bought: { tokenId: number; level: number }[]) => {
     const pre = await approvals.sqk(cfg.contracts.sqk, escrow, cost);
     const fill =
       ids.length === 1
         ? { label: `Buy ask #${ids[0]}`, address: escrow, abi: escrowAbi as Abi, functionName: "fillAsk", args: [BigInt(ids[0])] }
         : { label: `Buy ${ids.length} Squeeks in one transaction`, address: escrow, abi: escrowAbi as Abi, functionName: "fillAsks", args: [ids.map(BigInt)] };
-    run("Buy the path", [...pre, fill], refresh);
+    run("Buy the path", [...pre, fill], refresh, () => pairAfterBuy(cfg, me!, bought));
   };
 
   return (
@@ -79,10 +80,11 @@ export default function Planner({ cfg, who, me, tradingOff }: { cfg: Config; who
               .
             </p>
             <p className="muted">
-              Each merge starts that level's cooldown ({p.steps.map((s) => `L${s.level + 1}: ${(cfg.cooldownBlocks[s.level] ?? 0).toLocaleString("en-US")}`).join(", ")} Squeek blocks), so a long chain finishes over several hamster nights. Gain over buying nothing:{" "}
-              {(p.powerAfter - power(now.counts, cfg.basePower)).toLocaleString("en-US")} power.
+              Each merge starts that level's cooldown ({p.steps.map((s) => `L${s.level + 1}: ${eta(cfg.cooldownBlocks[s.level] ?? 0, cfg.blocksPerDay)}`).join(", ")}). Gain over buying nothing:{" "}
+              {(p.powerAfter - power(now.counts, cfg.basePower)).toLocaleString("en-US")} power
+              {perDay(p.powerAfter - power(now.counts, cfg.basePower), cfg.sqkPerPowerPerDay) && <> (≈ {perDay(p.powerAfter - power(now.counts, cfg.basePower), cfg.sqkPerPowerPerDay)} once deposited in Staking)</>}.
             </p>
-            <button className="primary" disabled={!isMe || tradingOff} onClick={() => buy(p.steps.map((s) => s.order.id), p.cost)}>
+            <button className="primary" disabled={!isMe || tradingOff} onClick={() => buy(p.steps.map((s) => s.order.id), p.cost, p.steps.map((s) => ({ tokenId: s.order.tokenId!, level: s.level })))}>
               {isMe ? `Buy ${p.steps.length > 1 ? "all in one transaction" : "it"}` : "Connect this wallet to buy"}
             </button>
           </Section>

@@ -14,7 +14,10 @@ export type Config = {
   coreHeight: number | null;
   snapshotAt: number | null;
   telegramBot: string | null;
+  blocksPerDay: number | null;
+  sqkPerPowerPerDay: number | null;
 };
+export type Want = { id: number; address: string; level: number; count: number; note: string; expiresAt: number; createdAt: number; status: string };
 export type Squeek = {
   id: number;
   owner: string;
@@ -65,6 +68,13 @@ export type Market = {
   mostWantedLevel: number | null;
 };
 
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`/api${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j as T;
+}
+
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`/api${path}`, { cache: "no-store" });
   if (!r.ok) throw new Error(`SqueekMatch server: HTTP ${r.status}`);
@@ -77,4 +87,11 @@ export const api = {
   board: () => get<Board>("/board"),
   orders: (status = "open") => get<{ orders: Order[] }>(`/orders?status=${status}`).then((r) => r.orders),
   market: () => get<Market>("/market"),
+  wants: () => get<{ wants: Want[] }>("/wants").then((r) => r.wants),
+  wantMessage: (q: Record<string, string | number>) =>
+    get<{ message: string }>(`/wants/message?${new URLSearchParams(Object.entries(q).map(([k, v]) => [k, String(v)]))}`).then((r) => r.message),
+  addWant: (body: unknown) => post<Want>("/wants", body),
+  cancelWant: (body: unknown) => post<Want>("/wants/cancel", body),
 };
+
+export const shareUrl = (kind: "o" | "w", id: number) => `${location.origin}/api/${kind}/${id}`;

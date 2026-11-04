@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { Abi, Address } from "viem";
-import type { Config, Order, Squeek } from "../api";
+import { shareUrl, type Config, type Order, type Squeek } from "../api";
+import { pairAfterBuy } from "../followups";
+import { Share } from "../share";
 import { escrowAbi } from "../chain";
 import { useOrders, useRefresh, useWallet } from "../data";
 import { same, sqk, toUnits, until } from "../format";
@@ -37,13 +39,17 @@ export default function Trade({ cfg, me, tradingOff }: Props) {
   async function fill(o: Order, tokenId?: number) {
     if (o.kind === "Ask") {
       const pre = await approvals.sqk(cfg.contracts.sqk, escrow, BigInt(o.price!));
-      return run(`Buy #${o.tokenId}`, [...pre, call(`Buy ask #${o.id}`, "fillAsk", [BigInt(o.id)])], refresh);
+      return run(`Buy #${o.tokenId}`, [...pre, call(`Buy ask #${o.id}`, "fillAsk", [BigInt(o.id)])], refresh, () =>
+        pairAfterBuy(cfg, me!, [{ tokenId: o.tokenId!, level: o.level }]),
+      );
     }
     if (!tokenId) return;
     const pre = await approvals.nft(cfg.contracts.nft, escrow);
     if (o.kind === "Bid") return run(`Sell #${tokenId}`, [...pre, call(`Fill bid #${o.id} with #${tokenId}`, "fillBid", [BigInt(o.id), BigInt(tokenId)])], refresh);
     const pay = await approvals.sqk(cfg.contracts.sqk, escrow, BigInt(o.sqkFromTaker ?? 0));
-    run(`Swap for #${o.tokenId}`, [...pre, ...pay, call(`Fill swap #${o.id} with #${tokenId}`, "fillSwap", [BigInt(o.id), BigInt(tokenId)])], refresh);
+    run(`Swap for #${o.tokenId}`, [...pre, ...pay, call(`Fill swap #${o.id} with #${tokenId}`, "fillSwap", [BigInt(o.id), BigInt(tokenId)])], refresh, () =>
+      pairAfterBuy(cfg, me!, [{ tokenId: o.tokenId!, level: o.level }]),
+    );
   }
 
   const cancel = (o: Order) => run(`Cancel ${o.kind.toLowerCase()} #${o.id}`, [call(`Cancel #${o.id}`, `cancel${o.kind}`, [BigInt(o.id)])], refresh);
@@ -91,6 +97,7 @@ export default function Trade({ cfg, me, tradingOff }: Props) {
                 <span className="order-description">{describe(o)}</span>
                 <span className="muted">{until(o.expiresAt)}</span>
                 {!o.fillable && <Tag tone="warn">Not fillable</Tag>}
+                <Share url={shareUrl("o", o.id)} text={o.kind === "Ask" ? `Selling a L${o.level} Squeek on SqueekMatch 🐹` : o.kind === "Bid" ? `Buying any L${o.level} Squeek on SqueekMatch 🐹` : `Swapping my L${o.level} Squeek on SqueekMatch 🐹`} />
                 <button onClick={() => cancel(o)}>Cancel</button>
               </div>
             ))
@@ -118,6 +125,7 @@ function OrderRow({ o, me, cfg, squeeks, height, onFill, disabled }: { o: Order;
       {o.tokenId ? <TokenLink id={o.tokenId} nft={cfg.contracts.nft} /> : null}
       <Addr a={o.maker} me={me} />
       <span className="muted">{until(o.expiresAt)}</span>
+      <Share url={shareUrl("o", o.id)} text={`L${o.level} Squeek ${o.kind === "Ask" ? "for sale" : o.kind === "Bid" ? "wanted" : "swap"} on SqueekMatch 🐹`} compact />
       {own ? (
         <Tag>Yours</Tag>
       ) : o.kind === "Ask" ? (
@@ -154,6 +162,7 @@ function CreateOrder({ cfg, me, squeeks, disabled, call }: { cfg: Config; me?: s
   const [days, setDays] = useState(7);
   const [wantedId, setWantedId] = useState("");
   const [direction, setDirection] = useState<"none" | "give" | "want">("none");
+  const [count, setCount] = useState(1);
   const { run } = useTx();
   const approvals = useApprovals();
   const refresh = useRefresh();
@@ -170,8 +179,13 @@ function CreateOrder({ cfg, me, squeeks, disabled, call }: { cfg: Config; me?: s
     }
     if (kind === "Bid") {
       if (!amount) return;
-      const pre = await approvals.sqk(cfg.contracts.sqk, escrow, amount);
-      return run(`Bid for L${level}`, [...pre, call(`Escrow ${sqk(amount)} for any L${level}`, "createBid", [level, mergeReady, amount, duration])], refresh);
+      const n = Math.min(20, Math.max(1, count));
+      const pre = await approvals.sqk(cfg.contracts.sqk, escrow, amount * BigInt(n));
+      const step =
+        n > 1
+          ? call(`Escrow ${sqk(amount * BigInt(n))} for ${n} × L${level}`, "createBids", [level, mergeReady, amount, BigInt(n), duration])
+          : call(`Escrow ${sqk(amount)} for any L${level}`, "createBid", [level, mergeReady, amount, duration]);
+      return run(n > 1 ? `Bid for ${n} × L${level}` : `Bid for L${level}`, [...pre, step], refresh);
     }
     if (!tokenSel) return;
     const give = direction === "give" ? amount ?? 0n : 0n;
@@ -239,8 +253,14 @@ function CreateOrder({ cfg, me, squeeks, disabled, call }: { cfg: Config; me?: s
         )}
         {(kind !== "Swap" || direction !== "none") && (
           <label className="field">
-            <span>{kind === "Ask" ? "Price (SQK)" : kind === "Bid" ? "You pay (SQK, escrowed)" : "Amount (SQK)"}</span>
+            <span>{kind === "Ask" ? "Price (SQK)" : kind === "Bid" ? "You pay per Squeek (SQK, escrowed)" : "Amount (SQK)"}</span>
             <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.0" inputMode="decimal" />
+          </label>
+        )}
+        {kind === "Bid" && (
+          <label className="field">
+            <span>How many (1-20)</span>
+            <input type="number" min={1} max={20} value={count} onChange={(e) => setCount(Number(e.target.value))} />
           </label>
         )}
         <label className="field">
@@ -257,7 +277,9 @@ function CreateOrder({ cfg, me, squeeks, disabled, call }: { cfg: Config; me?: s
         {kind === "Ask"
           ? "Your Squeek stays in your wallet until someone buys it. If you merge into it or move it, the listing stops filling."
           : kind === "Bid"
-            ? "Your SQK is held by the escrow until a seller fills it or you cancel. Cancel any time for a full refund."
+            ? count > 1
+              ? `Opens ${Math.min(20, Math.max(1, count))} bids in one transaction${amount ? `, ${sqk(amount * BigInt(Math.min(20, Math.max(1, count))))} escrowed in total` : ""}. Each fills on its own; cancel any of them for a refund.`
+              : "Your SQK is held by the escrow until a seller fills it or you cancel. Cancel any time for a full refund."
             : "Your Squeek stays in your wallet; only SQK you add is escrowed."}
       </p>
       <button className="primary" disabled={disabled || (kind !== "Bid" && !tokenSel) || ((kind !== "Swap" || direction !== "none") && !amount)} onClick={submit}>

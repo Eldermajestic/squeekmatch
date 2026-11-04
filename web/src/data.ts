@@ -5,6 +5,7 @@ export const useConfig = () => useQuery({ queryKey: ["config"], queryFn: api.con
 export const useBoard = () => useQuery({ queryKey: ["board"], queryFn: api.board, refetchInterval: 60_000 });
 export const useOrders = () => useQuery({ queryKey: ["orders"], queryFn: () => api.orders("open"), refetchInterval: 20_000 });
 export const useMarket = () => useQuery({ queryKey: ["market"], queryFn: api.market, refetchInterval: 30_000 });
+export const useWants = () => useQuery({ queryKey: ["wants"], queryFn: api.wants, refetchInterval: 30_000 });
 export const useWallet = (address?: string | null) =>
   useQuery({ queryKey: ["wallet", address?.toLowerCase()], queryFn: () => api.wallet(address!), enabled: !!address, refetchInterval: 30_000 });
 

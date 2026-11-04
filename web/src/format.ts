@@ -26,3 +26,33 @@ export const until = (unix: number) => {
 };
 
 export const blocksLeft = (next: number, height: number) => Math.max(0, next - height);
+
+export function eta(blocks: number, perDay: number | null | undefined) {
+  if (blocks <= 0) return "ready";
+  if (!perDay) return `${blocks.toLocaleString("en-US")} Squeek blocks`;
+  const days = blocks / perDay;
+  if (days < 1) return `~${Math.max(1, Math.round(days * 24))}h of hamster running`;
+  const n = Math.round(days);
+  return `~${n} hamster night${n > 1 ? "s" : ""}`;
+}
+
+export const perDay = (power: number, rate: number | null | undefined) =>
+  rate ? `${(power * rate).toLocaleString("en-US", { maximumFractionDigits: power * rate < 10 ? 2 : 0 })} SQK/day` : null;
+
+export const store = {
+  get<T>(k: string, fallback: T): T {
+    try {
+      const v = localStorage.getItem(k);
+      return v ? (JSON.parse(v) as T) : fallback;
+    } catch {
+      return fallback;
+    }
+  },
+  set(k: string, v: unknown) {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {
+      return;
+    }
+  },
+};

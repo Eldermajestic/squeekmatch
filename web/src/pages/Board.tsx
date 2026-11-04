@@ -3,6 +3,7 @@ import type { Config } from "../api";
 import { useBoard, useMarket } from "../data";
 import { sqk } from "../format";
 import { Addr, Empty, Level, Section, Tag, TokenLink } from "../ui";
+import Wants from "./Wants";
 
 export default function Board({ cfg, me, go }: { cfg: Config; me?: string; go: (p: "trade") => void }) {
   const board = useBoard();
@@ -23,6 +24,7 @@ export default function Board({ cfg, me, go }: { cfg: Config; me?: string; go: (
 
   return (
     <div className="stack-large">
+      <Wants cfg={cfg} me={me} go={go} />
       <Section title="By level" aside={<span className="muted">{b.holders.toLocaleString("en-US")} holders · updated {new Date(b.at).toLocaleTimeString()}</span>}>
         <table className="market-table">
           <thead>

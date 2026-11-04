@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { useQueries } from "@tanstack/react-query";
+import { Plus, Search, X } from "lucide-react";
 import { isAddress } from "viem";
-import type { Config, Squeek } from "../api";
+import { api, type Config, type Squeek } from "../api";
 import { useWallet } from "../data";
-import { blocksLeft, sqk } from "../format";
+import { blocksLeft, eta, perDay, short, sqk, store } from "../format";
 import { pairGain } from "../plan";
 import { Empty, Level, Notice, Section, Tag, TokenLink } from "../ui";
 
@@ -11,7 +12,18 @@ type Props = { cfg: Config; who: string | null; setViewed: (a: string | null) =>
 
 export default function Singles({ cfg, who, setViewed, me, go }: Props) {
   const [input, setInput] = useState(who ?? "");
+  const [saved, setSaved] = useState<string[]>(() => store.get<string[]>("sm.wallets", []));
   const wallet = useWallet(who);
+  const saveList = (list: string[]) => (setSaved(list), store.set("sm.wallets", list));
+  const others = useQueries({ queries: saved.map((a) => ({ queryKey: ["wallet", a], queryFn: () => api.wallet(a), refetchInterval: 60_000 })) });
+  const summary = saved.map((a, i) => {
+    const sq = others[i]?.data?.squeeks ?? [];
+    const byL = new Map<string, number>();
+    for (const x of sq) byL.set(`${x.custody}:${x.level}`, (byL.get(`${x.custody}:${x.level}`) ?? 0) + 1);
+    const singlesN = [...byL.entries()].filter(([k, n]) => n % 2 === 1 && Number(k.split(":")[1]) < cfg.maximumLevel).length;
+    const ready = sq.filter((x) => x.mergeReady).length;
+    return { a, n: sq.length, singlesN, ready, loading: others[i]?.isLoading };
+  });
   const submit = () => {
     const v = input.trim();
     if (isAddress(v)) setViewed(v.toLowerCase());
@@ -29,6 +41,7 @@ export default function Singles({ cfg, who, setViewed, me, go }: Props) {
   const singles = levels.filter((l) => split(l).single);
   const lost = singles.reduce((p, l) => p + pairGain(l, cfg.basePower), 0);
   const height = wallet.data?.coreHeight ?? cfg.coreHeight ?? 0;
+  const stakedPower = (wallet.data?.squeeks ?? []).filter((x) => x.custody === "staking").reduce((p, x) => p + (cfg.basePower[x.level - 1] ?? 0), 0);
 
   return (
     <div className="stack-large">
@@ -58,6 +71,42 @@ export default function Singles({ cfg, who, setViewed, me, go }: Props) {
         </form>
       </Section>
 
+      {(saved.length > 0 || who) && (
+        <Section
+          title="My wallets"
+          aside={
+            who && !saved.includes(who.toLowerCase()) ? (
+              <button onClick={() => saveList([...saved, who.toLowerCase()].slice(-10))}>
+                <Plus size={16} /> Save {short(who)}
+              </button>
+            ) : null
+          }
+        >
+          {saved.length ? (
+            <div className="wallet-summary">
+              {summary.map((w) => (
+                <div key={w.a} className={`token-row ${who?.toLowerCase() === w.a ? "selected" : ""}`}>
+                  <button className="inline" onClick={() => (setViewed(w.a), setInput(w.a))}>
+                    {short(w.a)}
+                  </button>
+                  <span className="muted">{w.loading ? "…" : `${w.n} Squeeks · ${w.singlesN} singles · ${w.ready} merge-ready`}</span>
+                  <button className="icon-button" aria-label={`Remove ${w.a}`} onClick={() => saveList(saved.filter((x) => x !== w.a))}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              {saved.length > 1 && (
+                <p className="muted">
+                  Across all: {summary.reduce((p, w) => p + w.n, 0)} Squeeks, {summary.reduce((p, w) => p + w.singlesN, 0)} singles. Saved in this browser only.
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="muted">Save wallets to watch them side by side. They stay in this browser.</p>
+          )}
+        </Section>
+      )}
+
       {!who ? (
         <Empty title="A small match. More power.">Paste an address or connect a wallet to see Squeeks left without a partner.</Empty>
       ) : wallet.isLoading ? (
@@ -81,6 +130,12 @@ export default function Singles({ cfg, who, setViewed, me, go }: Props) {
               <span className="muted">Power waiting for a partner</span>
               <strong className="balance-number">+{lost.toLocaleString("en-US")}</strong>
             </div>
+            {perDay(stakedPower, cfg.sqkPerPowerPerDay) && (
+              <div>
+                <span className="muted">Staking earns (est.)</span>
+                <strong className="balance-number">{perDay(stakedPower, cfg.sqkPerPowerPerDay)}</strong>
+              </div>
+            )}
             {wallet.data.rewards?.claimableBaseUnits && (
               <div>
                 <span className="muted">Claimable</span>
@@ -127,7 +182,7 @@ export default function Singles({ cfg, who, setViewed, me, go }: Props) {
                             ? "Max level"
                             : s.mergeReady
                               ? "Ready to merge"
-                              : `Cooldown: ${blocksLeft(s.nextMergeHeight, height).toLocaleString("en-US")} Squeek blocks`}
+                              : `Ready in ${eta(blocksLeft(s.nextMergeHeight, height), cfg.blocksPerDay)}`}
                         </span>
                       </div>
                     ))}

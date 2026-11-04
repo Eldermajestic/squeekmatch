@@ -1,11 +1,12 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { useAccount, usePublicClient, useWalletClient, useSwitchChain } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { BaseError, ContractFunctionRevertedError, type Abi, type Address } from "viem";
 import { EXPLORER, erc20Abi, nftAbi } from "./chain";
 
 export type Step = { label: string; address: Address; abi: Abi; functionName: string; args: readonly unknown[] };
-type Run = { title: string; steps: Step[]; current: number; hashes: string[]; error?: string; done?: boolean };
+export type FollowUp = { title: string; label: string; note?: string; steps: Step[] };
+type Run = { title: string; steps: Step[]; current: number; hashes: string[]; error?: string; done?: boolean; next?: FollowUp | null };
 
 const plain: Record<string, string> = {
   OrderNotOpen: "This order is no longer open.",
@@ -43,7 +44,8 @@ export function explain(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-const Ctx = createContext<{ run: (title: string, steps: Step[], onDone?: () => void) => void } | null>(null);
+type RunFn = (title: string, steps: Step[], onDone?: () => void, followUp?: () => Promise<FollowUp | null>) => void;
+const Ctx = createContext<{ run: RunFn } | null>(null);
 export const useTx = () => useContext(Ctx)!;
 
 export function TxProvider({ children }: { children: ReactNode }) {
@@ -52,9 +54,10 @@ export function TxProvider({ children }: { children: ReactNode }) {
   const { data: wallet } = useWalletClient();
   const { switchChainAsync } = useSwitchChain();
   const [state, setState] = useState<Run | null>(null);
+  const onAfterNext = useRef<(() => void) | undefined>(undefined);
 
   const run = useCallback(
-    async (title: string, steps: Step[], onDone?: () => void) => {
+    async (title: string, steps: Step[], onDone?: () => void, followUp?: () => Promise<FollowUp | null>) => {
       if (!address || !wallet || !pub) return setState({ title, steps, current: 0, hashes: [], error: "Connect a wallet first." });
       setState({ title, steps, current: 0, hashes: [] });
       try {
@@ -72,6 +75,11 @@ export function TxProvider({ children }: { children: ReactNode }) {
         }
         setState((x) => x && { ...x, current: steps.length, done: true });
         onDone?.();
+        onAfterNext.current = onDone;
+        if (followUp) {
+          const next = await followUp().catch(() => null);
+          if (next) setState((x) => x && { ...x, next });
+        }
       } catch (e) {
         setState((x) => x && { ...x, error: explain(e) });
       }
@@ -101,6 +109,17 @@ export function TxProvider({ children }: { children: ReactNode }) {
             <p className="simulation-note muted">Each step is dry-run first; your wallet only opens if it would succeed.</p>
             {state.error && <p className="notice error">{state.error}</p>}
             {state.done && <p className="notice success">Done.</p>}
+            {state.next && (
+              <div className="stack">
+                <p>
+                  <strong>{state.next.title}</strong>
+                  {state.next.note && <span className="muted"> {state.next.note}</span>}
+                </p>
+                <button className="primary" onClick={() => run(state.next!.title, state.next!.steps, onAfterNext.current)}>
+                  {state.next.label}
+                </button>
+              </div>
+            )}
             <button onClick={() => setState(null)}>{state.done || state.error ? "Close" : "Hide"}</button>
           </div>
         </div>

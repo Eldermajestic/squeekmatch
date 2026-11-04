@@ -3,7 +3,7 @@ import type { Abi } from "viem";
 import type { Config, Squeek } from "../api";
 import { nftAbi, stakingAbi } from "../chain";
 import { useRefresh, useWallet } from "../data";
-import { blocksLeft } from "../format";
+import { blocksLeft, eta, perDay } from "../format";
 import { useTx } from "../tx";
 import { Empty, Level, Notice, Section, Tag, TokenLink } from "../ui";
 
@@ -63,7 +63,7 @@ export default function Merge({ cfg, me }: { cfg: Config; me?: string }) {
               return (
                 <button key={s.id} className={`token-row ${sel ? "selected" : ""}`} aria-pressed={sel} disabled={!allowed} onClick={() => pick(s)}>
                   <Level l={s.level} /> #{s.id}
-                  <Tag tone={s.mergeReady ? "good" : undefined}>{s.mergeReady ? "Ready" : `${blocksLeft(s.nextMergeHeight, height)} blocks`}</Tag>
+                  <Tag tone={s.mergeReady ? "good" : undefined}>{s.mergeReady ? "Ready" : eta(blocksLeft(s.nextMergeHeight, height), cfg.blocksPerDay)}</Tag>
                   {s.custody === "staking" && <Tag tone="muted">Staking</Tag>}
                 </button>
               );
@@ -86,10 +86,14 @@ export default function Merge({ cfg, me }: { cfg: Config; me?: string }) {
             </p>
             <p>
               Power {(2 * (cfg.basePower[l - 1] ?? 0)).toLocaleString("en-US")} → <strong>{(cfg.basePower[l] ?? 0).toLocaleString("en-US")}</strong> (+
-              {((cfg.basePower[l] ?? 0) - 2 * (cfg.basePower[l - 1] ?? 0)).toLocaleString("en-US")}), from the next round.
+              {((cfg.basePower[l] ?? 0) - 2 * (cfg.basePower[l - 1] ?? 0)).toLocaleString("en-US")}), from the next round
+              {perDay((cfg.basePower[l] ?? 0) - 2 * (cfg.basePower[l - 1] ?? 0), cfg.sqkPerPowerPerDay) && (
+                <> · ≈ +{perDay((cfg.basePower[l] ?? 0) - 2 * (cfg.basePower[l - 1] ?? 0), cfg.sqkPerPowerPerDay)} while in Staking</>
+              )}
+              .
             </p>
             <p className="muted">
-              #{donor} is burned permanently. #{survivor} can merge again after {(cfg.cooldownBlocks[l] ?? 0).toLocaleString("en-US")} Squeek blocks.
+              #{donor} is burned permanently. #{survivor} can merge again in {eta(cfg.cooldownBlocks[l] ?? 0, cfg.blocksPerDay)} ({(cfg.cooldownBlocks[l] ?? 0).toLocaleString("en-US")} Squeek blocks at the hamster's 7-day pace).
             </p>
           </div>
           {!ready && <Notice tone="warning">One of these is still cooling down, so the merge would fail. Try again later.</Notice>}
