@@ -40,3 +40,5 @@ Serve `dist/` and proxy `/api/*` to the server (see `deploy/Caddyfile`).
 Version 2 builds on the SqueekMatch escrow first produced through IMD job b9a939c1, retargeted to Squeekchain's current NFT model and extended with batch fills, a server, Telegram alerts and a new web app.
 
 Fan-made and unofficial. Testnet only: Sepolia SQK and Squeeks have no monetary value. MIT licensed.
+
+squeekchain-project: 22f04d35-43a3-481d-8a5e-1126dee277e5
